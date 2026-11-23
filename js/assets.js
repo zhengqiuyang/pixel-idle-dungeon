@@ -5,8 +5,12 @@
 // 资源未就绪或不存在时 getSprite/getBg 返回 null，渲染层平滑回退 sprites.js。
 // ============================================================================
 
-// 当前已落盘的高清 PNG 精灵列表（新增对应 assets/sprites/<id>.png 时添加到此处，避免无意义的 404 请求）
-const SPRITE_IDS = ["boneLord"];
+// 全量 16 个高清 PNG 精灵清单（4 主角 + 8 小怪 + 4 Boss）
+const SPRITE_IDS = [
+  "hero", "vera", "irene", "kai",
+  "slime", "bat", "goblin", "skeleton", "mushroom", "gargoyle", "imp", "ghost",
+  "goblinKing", "boneLord", "golem", "dragon",
+];
 
 let bgAsset = null;
 const spriteCache = new Map();
