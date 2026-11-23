@@ -1,12 +1,12 @@
 CC0 Public Domain Sprite Attribution
 ===================================
 
-The 15 sprite PNGs listed below are sourced from Dungeon Crawl Stone Soup's
+The 14 sprite PNGs listed below are sourced from Dungeon Crawl Stone Soup's
 RLTiles tileset (https://github.com/crawl/crawl/tree/master/crawl-ref/source/rltiles),
 which is released into the Public Domain (CC0 / Public Domain):
 
-- Heroes: hero.png, vera.png, irene.png, kai.png
+- Companions: vera.png, irene.png, kai.png
 - Mobs: slime.png, bat.png, goblin.png, skeleton.png, mushroom.png, gargoyle.png, imp.png, ghost.png
 - Bosses: goblinKing.png, golem.png, dragon.png
 
-(`boneLord.png` and `assets/bg/dungeon_base.png` were custom-generated for Ember Abyss.)
+(`hero.png`, `boneLord.png`, and `assets/bg/dungeon_base.png` were custom-crafted for Ember Abyss.)
