@@ -843,11 +843,12 @@ function onKill() {
     const rar = Math.min(3, Math.max(0, Math.floor(Number(item.rarity) || 0)));
     if ((tier === 1 || tier === 2 || tier === 3) && rar < tier) {
       const amount = Math.max(1, Math.floor(Number(item.value) || 0));
-      S.gold = (Number(S.gold) || 0) + amount;
+      const goldBeforeSell = Number(S.gold) || 0;
+      S.gold = goldBeforeSell + amount;
       if (S.stats && typeof S.stats === "object") {
         S.stats.totalGold = (Number(S.stats.totalGold) || 0) + amount;
       }
-      emit("autosell", { x: MONSTER_X, y: GROUND_Y, item, amount });
+      emit("autosell", { x: MONSTER_X, y: GROUND_Y, item, amount, from: goldBeforeSell });
       item = null; // 已变现：不入背包、不再走 drop 表现
     } else {
       S.inventory.push(item);

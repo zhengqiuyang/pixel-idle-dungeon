@@ -744,9 +744,12 @@ function handleEvent(type, p) {
     {                // 低于档位的掉落不入背包，直接变现；金币飞入 HUD 面板）
       const amount = Math.max(0, Math.floor(Number(p.amount) || 0));
       const count = Math.max(1, Math.min(12, Math.round(amount)));
-      spawnFx(coinCollect, { x: combat.MONSTER_X, y: combat.GROUND_Y, count, from: state.gold });
+      const from = typeof p.from === "number" ? p.from : state.gold;
+      const rarIdx = p.item ? Math.min(3, Math.max(0, Math.floor(Number(p.item.rarity) || 0))) : null;
+      const rarLabel = rarIdx != null && RARITY_NAMES[rarIdx] ? `${RARITY_NAMES[rarIdx]}·` : "";
+      spawnFx(coinCollect, { x: combat.MONSTER_X, y: combat.GROUND_Y, count, from });
       sfx.coin();
-      addLog(`自动出售：${p.item && p.item.name ? p.item.name : "?"} +${amount} 金币`);
+      addLog(`自动出售：${rarLabel}${p.item && p.item.name ? p.item.name : "?"} +${amount} 金币`);
       break;
     }
 
@@ -951,6 +954,35 @@ function handleEvent(type, p) {
 // ---------------------------------------------------------------------------
 // actions（引擎↔界面契约；成功/失败返回 bool，ui.js 据此放音效/提示）
 // ---------------------------------------------------------------------------
+const FILTER_LABELS = { 1: "普通及以下", 2: "稀有及以下", 3: "史诗及以下" };
+
+function sweepInventoryBelow(tier) {
+  if (!Array.isArray(state.inventory) || state.inventory.length === 0) {
+    return { soldCount: 0, soldGold: 0 };
+  }
+  const kept = [];
+  let soldCount = 0;
+  let soldGold = 0;
+  for (const it of state.inventory) {
+    if (!it) continue;
+    const rar = Math.min(3, Math.max(0, Math.floor(Number(it.rarity) || 0)));
+    if (rar < tier && !it.uniqueId) {
+      soldCount += 1;
+      soldGold += Math.max(1, Math.floor(Number(it.value) || 0));
+    } else {
+      kept.push(it);
+    }
+  }
+  if (soldCount > 0) {
+    state.inventory.splice(0, state.inventory.length, ...kept);
+    state.gold = (Number(state.gold) || 0) + soldGold;
+    if (state.stats && typeof state.stats === "object") {
+      state.stats.totalGold = (Number(state.stats.totalGold) || 0) + soldGold;
+    }
+  }
+  return { soldCount, soldGold };
+}
+
 function findUpgrade(id) {
   return UPGRADES.find((u) => u.id === id) || null;
 }
@@ -1003,6 +1035,50 @@ const actions = {
     addLog(`出售 ${item.name} +${item.value} 金币`);
     refreshUI();
     return true;
+  },
+
+  setLootFilter(tier) {
+    const numTier = tier == null ? null : Math.floor(Number(tier));
+    const validTier = numTier === 1 || numTier === 2 || numTier === 3 ? numTier : null;
+    if (!state.lootFilter || typeof state.lootFilter !== "object") {
+      state.lootFilter = { autoSellBelow: validTier };
+    } else {
+      state.lootFilter.autoSellBelow = validTier;
+    }
+    if (validTier != null) {
+      const res = sweepInventoryBelow(validTier);
+      if (res.soldCount > 0) {
+        sfx.coin();
+        addLog(`已开启自动出售（${FILTER_LABELS[validTier]}），清理背包 ${res.soldCount} 件低质装备 +${res.soldGold} 金币`);
+      } else {
+        sfx.click();
+        addLog(`已开启自动出售（${FILTER_LABELS[validTier]}），新掉落将自动变现`);
+      }
+      saveGame(state);
+      refreshUI();
+      return res;
+    }
+    sfx.click();
+    addLog("已关闭自动出售低质");
+    saveGame(state);
+    refreshUI();
+    return { soldCount: 0, soldGold: 0 };
+  },
+
+  sellJunk(tier) {
+    const numTier = Math.floor(Number(tier));
+    if (numTier !== 1 && numTier !== 2 && numTier !== 3) return false;
+    const res = sweepInventoryBelow(numTier);
+    if (res.soldCount === 0) {
+      sfx.fail();
+      addLog(`背包内没有符合条件（${FILTER_LABELS[numTier]}）的低质装备`);
+      return false;
+    }
+    sfx.coin();
+    addLog(`一键清包（${FILTER_LABELS[numTier]}）：出售 ${res.soldCount} 件 +${res.soldGold} 金币`);
+    saveGame(state);
+    refreshUI();
+    return res;
   },
 
   setStayFloor(b) {

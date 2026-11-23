@@ -100,6 +100,7 @@ const PARTY_ORDER = ['vera', 'irene', 'kai'];
 
 // 展示性映射（纯文案，无数值）
 const STAT_LABELS = { atk: '攻击', hp: '生命', def: '防御', crit: '暴击', aspd: '攻速' };
+const FILTER_TIER_NAMES = { 1: '普通及以下', 2: '稀有及以下', 3: '史诗及以下' };
 // 副词条展示词汇（data.AFFIXES 的 name；value 一律 0~1 小数 → ×100 百分比显示）
 const AFFIX_NAMES = new Map(AFFIXES.map((a) => [a.key, a.name]));
 const SKILL_ICONS = { crack: '斩', shield: '盾', warcry: '吼' };
@@ -594,20 +595,23 @@ function buildPanel(panel) {
   filterLabel.append(R.filterCheck, el('span', '', '自动出售低质'));
   R.filterSel = el('select', 'filter-sel');
   R.filterSel.id = 'filter-sel';
-  R.filterSel.title = '自动出售的品质阈值（新掉落立即生效）';
-  for (const [v, label] of [[1, '普通及以下'], [2, '稀有及以下'], [3, '史诗及以下']]) {
+  R.filterSel.title = '自动出售及一键清包的品质阈值';
+  for (const [v, label] of Object.entries(FILTER_TIER_NAMES)) {
     const opt = el('option', '', label);
     opt.value = String(v);
     R.filterSel.appendChild(opt);
   }
-  filter.append(filterLabel, R.filterSel);
-  const filterHint = el('p', 'hint filter-hint', '关闭时所有掉落保留在背包，由你手动处置。');
+  R.btnSellJunk = el('button', 'btn btn-sm filter-sweep', '一键清包');
+  R.btnSellJunk.type = 'button';
+  R.btnSellJunk.title = '立即出售背包内符合当前档位的低质装备';
+  filter.append(filterLabel, R.filterSel, R.btnSellJunk);
+  R.filterHint = el('p', 'hint filter-hint', '关闭中：所有掉落保留在背包；勾选自动出售或点「一键清包」可按档位清理。');
   R.heroStats = el('div', 'hero-stats');
   R.eqTitle = el('h3', 'sec-title', '已装备');
   R.eqGrid = el('div', 'equipped-grid');
   R.invTitle = el('h3', 'sec-title', '背包');
   R.invList = el('div', 'inventory');
-  paneEq.append(filter, filterHint, R.heroStats, R.eqTitle, R.eqGrid, R.invTitle, R.invList);
+  paneEq.append(filter, R.filterHint, R.heroStats, R.eqTitle, R.eqGrid, R.invTitle, R.invList);
   R.paneEq = paneEq;
 
   // —— 面板③ 小队：余烬余额 + 伙伴招募卡 + 羁绊区 ——
@@ -757,25 +761,34 @@ function bindEvents() {
     refreshUI();
   });
 
-  // 装备：智能过滤栏（任务书指定 UI 直写 state.lootFilter）
-  R.filterCheck.addEventListener('change', () => {
-    initAudio();
+  // 装备：智能过滤栏（走 actions.setLootFilter / sellJunk，同时保留直写兜底）
+  const selectedTier = () => Math.max(1, Math.min(3, Number(R.filterSel.value) || 1));
+  const applyFilter = (target) => {
+    if (hasAction('setLootFilter')) {
+      safeCall(() => act('setLootFilter', target));
+      return;
+    }
     sfx.click();
     const s = C && C.state ? C.state : null;
     if (!s) return;
     if (!s.lootFilter || typeof s.lootFilter !== 'object') s.lootFilter = { autoSellBelow: null };
-    s.lootFilter.autoSellBelow = R.filterCheck.checked
-      ? Math.max(1, Math.min(3, Number(R.filterSel.value) || 1))
-      : null;
+    s.lootFilter.autoSellBelow = target;
+  };
+  R.filterCheck.addEventListener('change', () => {
+    initAudio();
+    applyFilter(R.filterCheck.checked ? selectedTier() : null);
     refreshUI();
   });
   R.filterSel.addEventListener('change', () => {
     initAudio();
-    sfx.click();
-    const s = C && C.state ? C.state : null;
-    if (!s || !R.filterCheck.checked) return;
-    if (!s.lootFilter || typeof s.lootFilter !== 'object') s.lootFilter = { autoSellBelow: null };
-    s.lootFilter.autoSellBelow = Math.max(1, Math.min(3, Number(R.filterSel.value) || 1));
+    if (R.filterCheck.checked) applyFilter(selectedTier());
+    else sfx.click();
+    refreshUI();
+  });
+  R.btnSellJunk.addEventListener('click', () => {
+    if (R.btnSellJunk.disabled) return;
+    initAudio();
+    safeCall(() => act('sellJunk', selectedTier()));
     refreshUI();
   });
 
@@ -1321,15 +1334,35 @@ function renderUpgrades(s) {
 
 function renderEquipment(s) {
   const h = s.hero || {};
+  const inv = Array.isArray(s.inventory) ? s.inventory : [];
 
-  // 智能过滤栏与 state.lootFilter 双向对齐（任务书指定 UI 直写）
+  // 智能过滤栏与 state.lootFilter 双向对齐（含状态文案与一键清包计数）
   const lf = (s.lootFilter && typeof s.lootFilter === 'object' ? s.lootFilter.autoSellBelow : null) || null;
   const filterSig = String(lf);
   if (filterSig !== R.filterSig) {
     R.filterSig = filterSig;
     R.filterCheck.checked = lf != null;
-    R.filterSel.disabled = lf == null;
+    R.filterSel.disabled = false;
     if (lf != null) R.filterSel.value = String(lf);
+    if (R.filterHint) {
+      R.filterHint.classList.toggle('active', lf != null);
+      R.filterHint.textContent = lf != null
+        ? `开启中：${FILTER_TIER_NAMES[lf] || '低质'}的新掉落自动变现；切换档位会同步清理背包。`
+        : '关闭中：所有掉落保留在背包；勾选自动出售或点「一键清包」可按档位清理。';
+    }
+  }
+
+  const selTier = Math.max(1, Math.min(3, Number(R.filterSel.value) || 1));
+  let junkCount = 0;
+  for (const it of inv) {
+    if (!it || !it.uid || it.uniqueId) continue;
+    if (rarityOf(it.rarity) < selTier) junkCount++;
+  }
+  const junkSig = `${selTier}|${junkCount}|${hasAction('sellJunk') ? 1 : 0}`;
+  if (junkSig !== R.junkSig && R.btnSellJunk) {
+    R.junkSig = junkSig;
+    R.btnSellJunk.textContent = junkCount > 0 ? `一键清包 (${junkCount})` : '一键清包';
+    R.btnSellJunk.disabled = !hasAction('sellJunk') || junkCount === 0;
   }
 
   // 属性总览（攻击/生命/防御/暴击/攻速；critChance 小数 → 百分比显示）
@@ -1352,7 +1385,6 @@ function renderEquipment(s) {
   }
 
   const equipped = s.equipped || {};
-  const inv = Array.isArray(s.inventory) ? s.inventory : [];
   const eqSig = sigOf([equipped, inv]);
   if (eqSig === R.eqSig) return;
   R.eqSig = eqSig;
