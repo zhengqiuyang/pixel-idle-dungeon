@@ -190,15 +190,15 @@ function normalizeSkillRecord(raw, entry) {
 // ---------------------------------------------------------------------------
 export const COMPANIONS = {
   vera: {
-    name: "秘法使·薇拉", x: 24, atkPct: 0.9, aspd: 0.8,
+    name: "秘法使·薇拉", x: 19, atkPct: 0.9, aspd: 0.8,
     unlock: { type: "bossKill", cost: { gold: 500 } }, desc: "法术爆发+灼烧",
   },
   irene: {
-    name: "圣愈者·艾琳", x: 50, healBased: true,
+    name: "圣愈者·艾琳", x: 52, healBased: true,
     unlock: { type: "embers", cost: 10 }, desc: "治疗+护盾+净化",
   },
   kai: {
-    name: "影刃·凯", x: 78, atkPct: 0.55, aspd: 1.6,
+    name: "影刃·凯", x: 81, atkPct: 0.55, aspd: 1.6,
     unlock: { type: "embers", cost: 25 }, desc: "连击+流血+斩杀",
   },
 };

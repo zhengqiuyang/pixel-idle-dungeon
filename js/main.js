@@ -149,9 +149,9 @@ if (debugParam === "party") {
 
 // 满编演出位（脚底 y=GROUND_Y；绘制顺序=遮挡顺序：从左到右，Boss 最后）
 const DEBUG_PARTY = [
-  { key: "vera", x: 24 },
-  { key: "irene", x: 50 },
-  { key: "kai", x: 78 },
+  { key: "vera", x: 19 },
+  { key: "irene", x: 52 },
+  { key: "kai", x: 81 },
   { key: "hero", x: 114 },
   { key: "goblinKing", x: 232, boss: true },
 ];
