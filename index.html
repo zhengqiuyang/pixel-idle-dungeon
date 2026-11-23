@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>余烬深渊 · Ember Abyss</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 顶栏：金币 / 灵魂余烬 / 层数与层名 / 英雄等级·经验·血量（数值由 js/ui.js 填充） -->
+    <header class="topbar px-frame" id="topbar">
+      <div class="tb-box tb-gold" id="tb-gold"></div>
+      <div class="tb-box tb-embers" id="tb-embers"></div>
+      <div class="tb-box tb-floor" id="tb-floor"></div>
+      <div class="tb-box tb-hero" id="tb-hero"></div>
+    </header>
+
+    <!-- 主区：320x180 战斗画布（引擎绘制）+ 画布内嵌像素 HUD 浮层（js/ui.js 构建，
+         绝对定位盖在 .stage-frame 上、pointer-events 精确放行交互件，不挡角色） -->
+    <main class="main-area" id="main-area">
+      <section class="stage px-frame" id="stage">
+        <div class="stage-frame" id="stage-frame">
+          <canvas id="game-canvas" width="320" height="180"></canvas>
+          <div class="hud" id="hud"></div>
+        </div>
+      </section>
+      <aside class="panel px-frame" id="panel"></aside>
+    </main>
+
+    <!-- 底部战斗日志（行内容由 js/ui.js 的 addLog 追加，保留最近 12 条） -->
+    <footer class="log-area px-frame" id="log-area">
+      <div class="log-title">◈ 远征纪事</div>
+      <div class="log-list" id="log-list"></div>
+    </footer>
+  </div>
+
+  <noscript>
+    <p style="color:#f5b92c;padding:12px">本游戏需要启用 JavaScript 才能运行。</p>
+  </noscript>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+# OS & Editor
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Dependencies & Logs
+node_modules/
+*.log
+
+# Environment & Local Temp
+.env
+.env.*
+*.tmp
