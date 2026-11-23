@@ -1,6 +1,8 @@
+<div align="center">
+
 # 余烬深渊 · Ember Abyss
 
-> 零构建像素风地下城挂机 RPG——把暗黑词条刷宝、4 人像素小队羁绊与轻肉鸽轮回塞进一个打开浏览器即玩的 320×180 像素画布。
+零构建像素风地下城挂机 RPG——把暗黑词条刷宝、4 人像素小队羁绊与轻肉鸽轮回塞进一个打开浏览器即玩的 320×180 像素画布。
 
 [![Play Online](https://img.shields.io/badge/Play-GitHub%20Pages-f5b92c?style=flat-square)](https://zhengqiuyang.github.io/pixel-idle-dungeon/)
 [![Vanilla JS](https://img.shields.io/badge/Vanilla%20JS-ES%20Modules-5aa2e8?style=flat-square)](package.json)
@@ -8,6 +10,8 @@
 [![pixelfx MIT](https://img.shields.io/badge/pixelfx-MIT%20License-58b03c?style=flat-square)](vendor/pixelfx/LICENSE)
 
 [快速开始](#quickstart) · [设计取舍](#why) · [核心循环](#how-it-works) · [实测体量](#proof) · [参考文档](#reference) · [当前边界](#limits)
+
+</div>
 
 <a id="quickstart"></a>
 
