@@ -1132,6 +1132,7 @@ function updateHud() {
     const cdMax = num(rec.cdMax) || entry.cd;
     btn.classList.toggle('locked', !unlocked);
     btn.classList.toggle('ready', unlocked && cd <= 0);
+    btn.classList.toggle('on-cd', unlocked && cd > 0);
     R.skillCds[entry.id].style.height = `${cd > 0 ? clampPct(cd / Math.max(0.1, cdMax)) : 0}%`;
     R.skillCdTxts[entry.id].textContent = cd > 0 ? String(Math.ceil(cd)) : '';
     const tac = normTacticMode(rec.tactic != null ? rec.tactic : skillTactic(s, entry.id).mode);

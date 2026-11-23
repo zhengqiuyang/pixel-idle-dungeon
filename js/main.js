@@ -54,6 +54,7 @@ import {
 import { COMPANIONS, companionUpgradeCost, syncHeroSkillUnlocks } from "./skills.js";
 import { RELICS, rollRelicChoices } from "./relics.js";
 import { EVENTS, MILESTONE_TEXTS } from "./narrative.js";
+import { initAssets, getBg, getSprite, drawAssetSprite } from "./assets.js";
 import * as combat from "./combat.js";
 
 // ---- 特效模块（pixelfx 速查 mapping，路径规则 fx/分类/名称.js）----
@@ -82,21 +83,44 @@ import * as poisonCloud    from "../vendor/pixelfx/src/fx/nature/poison-cloud.js
 import * as smallExplosion from "../vendor/pixelfx/src/fx/explosions/small-explosion.js";
 
 // ---------------------------------------------------------------------------
-// 画布与帧缓冲（320x180，CSS pixelated 放大由 index.html/style.css 负责）
+// 画布与帧缓冲（640x360 高清像素画布，逻辑战斗坐标仍为 320x180 × SCALE=2）
 // ---------------------------------------------------------------------------
 const W = 320, H = 180;
+const SCALE = 2;
+const VIEW_W = W * SCALE, VIEW_H = H * SCALE;
 const BG_CSS = "#14101c";         // 微震时露底的底色（被主题雾覆盖前的一帧兜底）
 const WHITE = (hex("#ffffff") | 0xff000000) >>> 0; // 受击闪白（ABGR 打包）
 
 const canvas = document.getElementById("game-canvas");
 if (!canvas) {
-  throw new Error('main.js: 找不到 #game-canvas（index.html 需包含 <canvas id="game-canvas" width="320" height="180">）');
+  throw new Error('main.js: 找不到 #game-canvas（index.html 需包含 <canvas id="game-canvas" width="640" height="360">）');
 }
+canvas.width = VIEW_W;
+canvas.height = VIEW_H;
 const ctx = canvas.getContext("2d");
 ctx.imageSmoothingEnabled = false;
 
+// 传统底图与回退精灵缓冲（320x180）
 const frameBuf = createFrame(W, H);
 const imgData = ctx.createImageData(W, H);
+const fallbackCanvas = document.createElement("canvas");
+fallbackCanvas.width = W;
+fallbackCanvas.height = H;
+const fallbackCtx = fallbackCanvas.getContext("2d");
+fallbackCtx.imageSmoothingEnabled = false;
+const fallbackFrame = createFrame(W, H);
+const fallbackImgData = fallbackCtx.createImageData(W, H);
+
+// 前景 pixelfx 特效透明叠加层（320x180 → 2x 最近邻放大）
+const fxCanvas = document.createElement("canvas");
+fxCanvas.width = W;
+fxCanvas.height = H;
+const fxCtx = fxCanvas.getContext("2d");
+fxCtx.imageSmoothingEnabled = false;
+const fxFrame = createFrame(W, H);
+const fxImgData = fxCtx.createImageData(W, H);
+
+initAssets();
 
 // ---------------------------------------------------------------------------
 // 场景常量：瓷砖 16px；背景带宽 = 320 + 16（多出一列供视差窗口滑动）。
@@ -612,10 +636,10 @@ function applyTheme(theme, withFx) {
 }
 
 // ---------------------------------------------------------------------------
-// 受击闪白：在精灵包围盒内，把「与本帧底图不同」的像素刷白（即角色本体像素）
+// 受击闪白：在精灵包围盒内，把「非透明实体像素」刷白（回退 sprites.js 时使用）
 // ---------------------------------------------------------------------------
-function applyFlash(v, spriteId) {
-  const key = String(spriteId).split("_")[0].replace(/\d+$/, ""); // hero_atk0→hero, slime0→slime, goblinKing0→goblinKing
+function applyFlashToFrame(targetFrame, v, spriteId) {
+  const key = String(spriteId).split("_")[0].replace(/\d+$/, "");
   const anchor = sprites.SPRITE_ANCHOR[key];
   if (!anchor) return;
   const [w, h] = anchor;
@@ -626,7 +650,7 @@ function applyFlash(v, spriteId) {
     for (let col = left; col < left + w; col++) {
       if (col < 0 || col >= W) continue;
       const i = row * W + col;
-      if (frameBuf.color[i] !== curBgFrame.color[i]) frameBuf.color[i] = WHITE;
+      if (targetFrame.color[i] !== 0) targetFrame.color[i] = WHITE;
     }
   }
 }
@@ -1428,63 +1452,198 @@ function companionSpriteId(c) {
 }
 
 // ---------------------------------------------------------------------------
+// 2D 余烬飘浮微粒 + 动态火把光晕（用于 640x360 哥特高清地牢舞台）
+// ---------------------------------------------------------------------------
+const emberMotes = Array.from({ length: 18 }, (_, i) => ({
+  x: ((i * 97) % 620) + 10,
+  y: ((i * 53) % 280) + 30,
+  vy: 10 + (i % 5) * 4,
+  phase: i * 1.1,
+  size: i % 3 === 0 ? 2 : 1,
+}));
+
+function drawGroundShadow(x, y, width) {
+  ctx.save();
+  ctx.fillStyle = "rgba(8, 5, 14, 0.45)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + 1, Math.max(12, width * 0.42), 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawHdBackground(nowSec, dx, dy) {
+  const bg = getBg();
+  if (!bg) return false;
+  const off = scrolling ? Math.round(TILE * SCALE * (1 - Math.pow(1 - scrollT, 2))) : 0;
+  ctx.imageSmoothingEnabled = false;
+  // 横向无缝轻微视差偏移
+  ctx.drawImage(bg.img, dx - off, dy, VIEW_W, VIEW_H);
+  if (off > 0) ctx.drawImage(bg.img, dx + VIEW_W - off, dy, VIEW_W, VIEW_H);
+
+  // 主题色相氛围叠层（保持 8 大地牢每 5 层切换不同情绪色调）
+  if (themeObj) {
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = themeObj.fogColor || "#14101c";
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.restore();
+  }
+
+  // 两侧铁火盆动态暖光光晕（随主题 glow 色微微闪烁）
+  const glowHex = (themeObj && themeObj.glow) || "#ff9e3d";
+  const flicker = 0.88 + Math.sin(nowSec * 9.5) * 0.06 + Math.cos(nowSec * 14.3) * 0.05;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  for (const bx of [158, 482]) {
+    const r = 135 * flicker;
+    const grad = ctx.createRadialGradient(bx + dx, 148 + dy, 4, bx + dx, 148 + dy, r);
+    grad.addColorStop(0, "rgba(255, 226, 140, 0.26)");
+    grad.addColorStop(0.38, "rgba(255, 142, 48, 0.13)");
+    grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(bx + dx - r, 148 + dy - r, r * 2, r * 2);
+  }
+  ctx.restore();
+
+  // 缓慢升起的余烬火星
+  ctx.save();
+  ctx.fillStyle = glowHex;
+  for (const m of emberMotes) {
+    const my = ((m.y - nowSec * m.vy) % 310 + 310) % 310;
+    const mx = m.x + Math.sin(nowSec * 2 + m.phase) * 8;
+    const a = 0.25 + 0.35 * Math.abs(Math.sin(nowSec * 3 + m.phase));
+    ctx.globalAlpha = a;
+    ctx.fillRect(Math.round(mx + dx), Math.round(my + dy), m.size, m.size);
+  }
+  ctx.restore();
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // 渲染与主循环
 // ---------------------------------------------------------------------------
 function render() {
-  // 本帧底图整体拷贝（已含主题着色/装饰/视差偏移/火把座/边缘雾，且留下闪白参照）
-  frameBuf.color.set(curBgFrame.color);
-  frameBuf.light.fill(0);
-
-  // ① 背景层特效：火把（torch 无 drawBack，整实例画在角色之前即 "back" 层效果）
-  for (const inst of fxs) if (inst.stage === "back") inst.fx.draw(frameBuf);
-
-  if (debugScene) {
-    renderDebugScene(); // 调试：满编演出位 / 静态楼层场景（无战斗实体）
-  } else {
-    // ② 怪物（精灵默认朝左面向英雄，无需 flip；濒死英雄用低 alpha 抖动残影）
-    const mv = combat.view.monster;
-    if (mv.visible) {
-      drawSprite(frameBuf, mv.sprite, mv.x, mv.y, { alpha: mv.alpha });
-      if (mv.flash > 0) applyFlash(mv, mv.sprite);
-    }
-
-    // ③ 伙伴小队（按 x 从左到右绘制：薇拉→艾琳→凯）
-    const comps = Array.isArray(combat.view.companions) ? combat.view.companions : [];
-    for (const c of comps) {
-      drawSprite(frameBuf, companionSpriteId(c), c.x, c.y, { alpha: c.alpha ?? 1 });
-    }
-
-    // ④ 英雄（帧由 combat 攻击计时驱动，见 heroSpriteId）
-    const hv = combat.view.hero;
-    const heroId = heroSpriteId(hv);
-    drawSprite(frameBuf, heroId, hv.x, hv.y, { alpha: hv.alpha });
-    if (hv.flash > 0) applyFlash(hv, heroId);
-  }
-
-  // ④ 前景特效：伤害数字/打击/掉落等。这些模块的 drawBack 同样是特效主体
-  //    （loot-beam 光柱、xp-orb 球体、coin-collect 面板等），且此时角色已画完，
-  //    整实例叠加（不传 layer）即契约 "front" 语义：全部呈现在角色之上。
-  for (const inst of fxs) if (inst.stage === "front") inst.fx.draw(frameBuf);
-
-  // 逐像素底图作为半透明特效像素的混合背景（受击抖动 alpha / 粒子淡出更准确）
-  composite(frameBuf, imgData.data, curBgFrame.color, 1);
-
-  // ⑤ 微震：putImageData 平移 2-3px（先铺底色避免边缘残影）
+  const nowSec = performance.now() / 1000;
   let dx = 0, dy = 0;
   if (shakeT > 0) {
-    dx = Math.round((Math.random() * 2 - 1) * 3);
-    dy = Math.round((Math.random() * 2 - 1) * 2);
+    dx = Math.round((Math.random() * 2 - 1) * 5);
+    dy = Math.round((Math.random() * 2 - 1) * 3);
   }
+
   ctx.fillStyle = themeObj ? themeObj.bg : BG_CSS;
-  ctx.fillRect(0, 0, W, H);
-  ctx.putImageData(imgData, dx, dy);
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  const hdBg = drawHdBackground(nowSec, dx, dy);
+  if (!hdBg) {
+    // 兜底：原版像素瓷砖背景 + back 火把特效（2x 放大）
+    frameBuf.color.set(curBgFrame.color);
+    frameBuf.light.fill(0);
+    for (const inst of fxs) if (inst.stage === "back") inst.fx.draw(frameBuf);
+    composite(frameBuf, imgData.data, curBgFrame.color, 1);
+    fallbackCtx.putImageData(imgData, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(fallbackCanvas, dx, dy, VIEW_W, VIEW_H);
+  }
+
+  // 准备回退帧缓冲（仅当某个实体暂无 PNG 资源时才绘制并叠加）
+  let usedFallback = false;
+  fallbackFrame.color.fill(0);
+  fallbackFrame.light.fill(0);
+
+  const drawEntity = (key, spriteId, x, y, opts = {}) => {
+    const png = getSprite(key);
+    if (png) {
+      drawGroundShadow(x * SCALE + dx, y * SCALE + dy, png.w * 0.72);
+      drawAssetSprite(ctx, png, x * SCALE + dx, y * SCALE + dy, opts);
+      return;
+    }
+    usedFallback = true;
+    drawSprite(fallbackFrame, spriteId, x, y, { alpha: opts.alpha ?? 1 });
+    if (opts.flash > 0) applyFlashToFrame(fallbackFrame, { x, y }, spriteId);
+  };
+
+  if (debugScene) {
+    if (debugScene.type === "party") {
+      for (const m of DEBUG_PARTY) {
+        const frames = debugIdleFrames(m.key);
+        const fId = frames ? frames[Math.floor(nowSec / 0.45) % frames.length] : `${m.key}0`;
+        const bob = Math.sin(nowSec * 3.5 + m.x * 0.05) * 0.02;
+        drawEntity(m.key, fId, m.x, combat.GROUND_Y, { scaleY: 1 + bob, scaleX: 1 - bob * 0.6 });
+      }
+    }
+  } else {
+    // ② 怪物（PNG 走入跳跃 + 受击闪白，无 PNG 时回退 sprites.js）
+    const mv = combat.view.monster;
+    if (mv.visible) {
+      const enterHop = combat.view.phase === "enter" ? Math.abs(Math.sin(nowSec * 12)) * 4 : 0;
+      const breath = Math.sin(nowSec * 3.4 + 1.2) * 0.022;
+      drawEntity(mv.sprite, mv.sprite, mv.x, mv.y - enterHop, {
+        alpha: mv.alpha,
+        flash: mv.flash,
+        scaleY: 1 + breath,
+        scaleX: 1 - breath * 0.6,
+      });
+    }
+
+    // ③ 伙伴小队（薇拉→艾琳→凯）
+    const comps = Array.isArray(combat.view.companions) ? combat.view.companions : [];
+    for (const c of comps) {
+      const acting = c.anim && c.anim.name !== "idle";
+      const prog = acting && c.anim.dur > 0 ? Math.sin((1 - c.anim.t / c.anim.dur) * Math.PI) : 0;
+      const breath = Math.sin(c.clock * 3.8) * 0.02;
+      drawEntity(c.id, companionSpriteId(c), c.x + prog * (c.id === "kai" ? 8 : 3), c.y - prog * 2, {
+        alpha: c.alpha ?? 1,
+        scaleY: 1 + breath,
+        tilt: acting && c.id === "kai" ? prog * 0.08 : 0,
+      });
+    }
+
+    // ④ 主勇者（呼吸 + 挥砍前冲 + 受击后仰闪白）
+    const hv = combat.view.hero;
+    const heroId = heroSpriteId(hv);
+    const hAnim = hv.anim || { name: "idle", t: 0, dur: 0.24 };
+    let hDx = 0, hDy = 0, hTilt = 0;
+    if (hAnim.name === "atk" && hAnim.dur > 0) {
+      const p = Math.sin((1 - hAnim.t / hAnim.dur) * Math.PI);
+      hDx = p * 9;
+      hTilt = p * 0.1;
+    } else if (hAnim.name === "hurt") {
+      hDx = -4;
+      hTilt = -0.08;
+    }
+    const hBreath = Math.sin(hv.clock * 3.8) * 0.02;
+    drawEntity("hero", heroId, hv.x + hDx, hv.y + hDy, {
+      alpha: hv.alpha,
+      flash: hv.flash,
+      scaleY: 1 + hBreath,
+      scaleX: 1 - hBreath * 0.6,
+      tilt: hTilt,
+    });
+  }
+
+  // 把需要回退 sprites.js 的实体透明叠加到 640x360 画布上
+  if (usedFallback) {
+    composite(fallbackFrame, fallbackImgData.data, null, 1);
+    fallbackCtx.putImageData(fallbackImgData, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(fallbackCanvas, dx, dy, VIEW_W, VIEW_H);
+  }
+
+  // ④ 前景 pixelfx 特效（透明合成后 2x 像素风放大覆盖）
+  fxFrame.color.fill(0);
+  fxFrame.light.fill(0);
+  for (const inst of fxs) if (inst.stage === "front") inst.fx.draw(fxFrame);
+  composite(fxFrame, fxImgData.data, null, 1);
+  fxCtx.putImageData(fxImgData, 0, 0);
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(fxCanvas, dx, dy, VIEW_W, VIEW_H);
 
   // ⑥ 换层雾色过渡：整屏向主题 fogColor 的正弦薄雾（0.5s，中段最浓）
   if (sweepT > 0) {
     const s = Math.sin((sweepT / SWEEP_DUR) * Math.PI) * 0.55;
     const [fr, fg, fb] = themeAssetsFor(themeObj).fogRGB;
     ctx.fillStyle = `rgba(${fr},${fg},${fb},${s.toFixed(3)})`;
-    ctx.fillRect(0, 0, W, H);
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
   }
 }
 
