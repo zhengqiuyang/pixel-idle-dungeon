@@ -1,75 +1,126 @@
-# 余烬深渊 · Ember Abyss (`pixel-idle-dungeon`)
+# 余烬深渊 · Ember Abyss
 
-一款基于原生 Vanilla ES Modules + 320×180 像素帧缓冲的**零构建像素风地下城挂机 RPG**，融合了暗黑式刷宝词条、像素小队羁绊与轻肉鸽轮回成长。
+> 零构建像素风地下城挂机 RPG——把暗黑词条刷宝、4 人像素小队羁绊与轻肉鸽轮回塞进一个打开浏览器即玩的 320×180 像素画布。
 
-> 太阳熄灭后的第七百年，黑暗成了唯一的国。初火远征的火把一支支沉入深渊——递到你手里时，还温着。
+[![Play Online](https://img.shields.io/badge/Play-GitHub%20Pages-f5b92c?style=flat-square)](https://zhengqiuyang.github.io/pixel-idle-dungeon/)
+[![Vanilla JS](https://img.shields.io/badge/Vanilla%20JS-ES%20Modules-5aa2e8?style=flat-square)](package.json)
+[![Pixel Canvas](https://img.shields.io/badge/Canvas-320x180%20Pixel-a86ae8?style=flat-square)](js/main.js)
+[![pixelfx MIT](https://img.shields.io/badge/pixelfx-MIT%20License-58b03c?style=flat-square)](vendor/pixelfx/LICENSE)
 
----
+[快速开始](#quickstart) · [设计取舍](#why) · [核心循环](#how-it-works) · [实测体量](#proof) · [参考文档](#reference) · [当前边界](#limits)
 
-## 核心特性
-
-* **手绘像素美术与 8 大动态地牢主题**
-  * 遵循色相偏移（Hue Shifting）、选择性轮廓与脚底接触投影绘制的 `24×28` 勇者与三位职业伙伴、8 种小怪及 `36×40` 深渊 Boss。
-  * 每 5 层切换一套主题配色与场景装饰（荒废地窖、蛛巢回廊、熔岩隧道、冰霜监牢、暗影圣所、腐烂苗床、雷霆囚笼、余烬王座），伴随视差行军推进与雾色过渡。
-* **暗黑刷宝与 Build 构筑**
-  * 4 部位 × 4 品质装备体系，支持同部位属性自动对比、7 种随机副词条与智能低质自动出售过滤器。
-  * 12 件带机制改变效果的传说暗金装备（闪电链、暴击护盾、低血狂暴、叠层流血、斩杀、免死余烬、暴击减伙伴冷却等）与主勇者 3 项可调战术自动技能。
-* **像素小队与羁绊策略**
-  * 招募并调度 **秘法使·薇拉**（爆发与新星）、**圣愈者·艾琳**（治疗/护盾/净化）、**影刃·凯**（高频连击/流血/斩杀）并肩作战，激活 5 套跨角色小队羁绊。
-* **轻肉鸽远征与凯旋轮回**
-  * 击败深渊之主获得 **三选一遗物**（共 22 种），自动进入待选队列**不打断后台挂机**，亦支持按流派标签自动代选。
-  * 探索途中随机触发 **14 种深渊奇遇事件**；第 10 层起可随时「凯旋回城」，重置本轮层数与金币强化，**永久保留全部装备、伙伴与编年史**，并将积累兑换为灵魂余烬点亮 **初火祭坛永久天赋树**。
-* **挂机友好与离线结算**
-  * 内置离线收益结算（最高 8 小时，吃离线倍率天赋与战利品自动过滤）、实时分来源 DPS 统计面板、WebAudio 合成音效以及 Base64 存档导入/导出。
-
----
+<a id="quickstart"></a>
 
 ## 快速开始
 
-本项目无需任何打包工具或后端依赖，开箱即玩：
+直接打开在线试玩页：https://zhengqiuyang.github.io/pixel-idle-dungeon/
 
-### 方式一：Windows 一键启动
-双击根目录下的 `play.bat`，会自动启动本地 HTTP 服务并打开浏览器访问 `http://127.0.0.1:8021/`（需本机安装 Python 3）。
-
-### 方式二：任意静态服务器 / GitHub Pages
-在项目根目录运行任意静态服务器即可：
+或者拉取到本地零构建启动（Windows 可直接双击 [play.bat](play.bat) 自动拉起服务并打开浏览器）：
 
 ```bash
+git clone https://github.com/zhengqiuyang/pixel-idle-dungeon.git
+cd pixel-idle-dungeon
 python -m http.server 8021
 ```
 
-然后浏览器打开 `http://127.0.0.1:8021/`。也可直接启用 GitHub Pages（Deploy from `main` branch `/ (root)`）在线游玩。
+启动后浏览器访问 `http://127.0.0.1:8021/` 即可开玩（ES Modules 需通过 HTTP 服务加载，不能用 `file://` 直接双击 `index.html`）。
 
-### 调试预览参数
-* `?debug=party`：同屏预览 4 人小队满编站位与 Boss 像素模型
-* `?debug=floor=N`：预览第 `N` 层主题配色与场景装饰
+> [!NOTE]
+> 游戏每 5 秒自动写入浏览器 `localStorage`，支持最高 8 小时离线收益结算，并可在「典籍 → 设置」中导出 / 导入 Base64 存档文本。
 
----
+<a id="why"></a>
 
-## 项目结构
+## 为什么做它
 
-```text
-pixel-idle-dungeon/
-├── index.html          # 页面骨架与画布/HUD容器
-├── play.bat            # Windows 一键启动脚本
-├── css/style.css       # 复古像素风界面与 HUD/弹窗样式
-├── js/
-│   ├── main.js         # 主循环、主题视差渲染、VFX 与交互 actions
-│   ├── combat.js       # 战斗模拟、技能/暗金 hooks、小队 AI 与队列触发
-│   ├── data.js         # 数值曲线、怪物名册、副词条与 12 件暗金定义
-│   ├── state.js        # 存档读写/迁移(v1→v2)、属性派生、轮回与离线结算
-│   ├── skills.js       # 主勇者技能、伙伴定义与小队羁绊
-│   ├── relics.js       # 22 种肉鸽遗物与初火祭坛永久天赋树
-│   ├── themes.js       # 8 大地牢主题色板与装饰配置
-│   ├── narrative.js    # 世界观序章、Boss 台词、14 个奇遇与暗金风味文案
-│   ├── sprites.js      # 字符网格像素精灵库与脚底投影绘制
-│   ├── ui.js           # 画布内嵌 HUD、5 标签面板、三选一/奇遇/轮回弹窗
-│   └── audio.js        # WebAudio 程序化复古音效
-└── vendor/pixelfx/     # 内置像素粒子与帧缓冲特效库 (MIT License)
+很多挂机游戏后期只剩「挂机等数字膨胀」，而传统肉鸽死亡又会清空刷宝成果。《余烬深渊》把「局内肉鸽 + 局外刷宝 + 小队羁绊」分层融合，让离线挂机和上线构筑互不打架：
+
+| 维度 | 传统数值挂机 | 传统硬核肉鸽 | 《余烬深渊》 |
+|---|---|---|---|
+| 后台挂机体验 | 自动刷怪但打法单一 | 必须全程手操，无法离线 | 三选一遗物与奇遇进队列不卡战斗 |
+| 构筑与策略深度 | 堆叠平铺百分比 | 单人换武器或卡牌 | 12 暗金机制 + 7 副词条 + 5 组小队羁绊 |
+| 轮回挫败感 | 转生清零一切重新熬 | 阵亡即丢当次全部装备 | 第 10 层起随时凯旋，装备与伙伴永久保留 |
+| 部署与运行门槛 | 依赖框架或后端 | 客户端安装包或打包构建 | 原生 HTML/CSS/ESM，任意静态托管即玩 |
+
+<a id="how-it-works"></a>
+
+## 核心循环
+
+```mermaid
+flowchart LR
+    A[推层自动战斗与 Boss 倒计时] --> B[掉落副词条与暗金装备]
+    B --> C[Boss 必掉三选一遗物入队]
+    C --> D[调整小队站位羁绊与技能战术]
+    D --> E[第 10 层起随时凯旋回城]
+    E --> F[兑换余烬点亮初火永久天赋]
+    F --> A
 ```
 
----
+<a id="proof"></a>
 
-## 开源致谢
+## 当前版本实测体量
 
-* 战斗特效与帧缓冲合成基于 `vendor/pixelfx`（MIT License，详见 [vendor/pixelfx/LICENSE](vendor/pixelfx/LICENSE) 与 [vendor/pixelfx/NOTICE.md](vendor/pixelfx/NOTICE.md)）。
+以下数据均直接统计自当前仓库代码（[js/data.js](js/data.js)、[js/sprites.js](js/sprites.js)、[js/skills.js](js/skills.js)、[js/relics.js](js/relics.js)、[js/narrative.js](js/narrative.js)、[js/themes.js](js/themes.js)）：
+
+| 维度 | 实装规模 | 代码出处 |
+|---|---|---|
+| 核心源码体量 | 11 个原生 JS 模块 + CSS/HTML 共 10,677 行 | [js/main.js](js/main.js) |
+| 像素美术与场景 | 82 帧字符网格精灵 · 8 套主题地牢与视差行军 | [js/sprites.js](js/sprites.js) |
+| 战斗特效 | 接入 23 个 `pixelfx` 像素粒子/数字/状态特效 | [vendor/pixelfx/README.md](vendor/pixelfx/README.md) |
+| 暗黑刷宝词条 | 12 件独特机制传说暗金 · 7 种随机副词条 | [js/data.js](js/data.js) |
+| 小队与构筑 | 3 项勇者战术技能 · 3 位伙伴 · 5 套小队羁绊 | [js/skills.js](js/skills.js) |
+| 肉鸽与叙事内容 | 22 个遗物 · 8 项永久天赋 · 14 个奇遇 · 编年史 | [js/relics.js](js/relics.js) |
+
+> [!TIP]
+> 在仓库根目录运行 `node --check js/main.js`（或遍历 `js/*.js`）即可在无打包器环境下验证全部 ES Module 语法完整性。
+
+<a id="reference"></a>
+
+## 参考文档
+
+<details>
+<summary><b>目录结构与 11 个核心模块说明</b></summary>
+
+| 文件 | 职责 |
+|---|---|
+| [index.html](index.html) / [css/style.css](css/style.css) | 主页面骨架、画布内嵌像素 HUD 浮层、5 标签面板与弹窗样式 |
+| [js/main.js](js/main.js) | `requestAnimationFrame` 主循环、8 主题重着色与视差渲染、`pixelfx` 特效与交互 actions |
+| [js/combat.js](js/combat.js) | 怪物生成、勇者与伙伴技能 AI、12 件暗金 hooks、滚动 10 秒分来源 DPS 统计 |
+| [js/data.js](js/data.js) | 怪物成长曲线、装备与 7 种副词条、12 件传说暗金定义、离线效率估算 |
+| [js/state.js](js/state.js) | v1→v2 存档自动迁移、属性派生、离线过滤结算、凯旋轮回与 Base64 导入导出 |
+| [js/skills.js](js/skills.js) | 主勇者 3 技能、3 位伙伴（秘法使·薇拉 / 圣愈者·艾琳 / 影刃·凯）与 5 套羁绊 |
+| [js/relics.js](js/relics.js) | 22 个肉鸽遗物（暴击 / 持续伤害 / 生存 / 经济）、三选一权重池与 8 项永久天赋 |
+| [js/themes.js](js/themes.js) | 8 套地牢配色方案（荒废地窖→余烬王座）与装饰物分布 |
+| [js/narrative.js](js/narrative.js) | 开场短诗、Boss 战前气泡台词、14 个奇遇事件、暗金风味文案与编年史里程碑 |
+| [js/sprites.js](js/sprites.js) | Hue-Shifting 色板、`24×28` 勇者与伙伴、`36×40` Boss 与脚底接触投影绘制 |
+| [js/ui.js](js/ui.js) / [js/audio.js](js/audio.js) | 顶栏/HUD/背包对比/过滤/三选一与奇遇弹窗、WebAudio 程序化合成音效 |
+
+</details>
+
+<details>
+<summary><b>调试预览参数与伙伴解锁条件速查</b></summary>
+
+* `?debug=party`：暂停战斗并在画布同屏预览 4 人小队站位与 Boss 模型
+* `?debug=floor=N`：静态预览第 `N` 层对应的地牢主题配色与装饰物（每 5 层轮换）
+* **秘法使·薇拉**：击杀任意深渊之主后花费 500 金币招募，主攻法术爆发与链式新星
+* **圣愈者·艾琳**：消耗 10 灵魂余烬招募，负责治疗、护盾与净化毒蘑菇中毒
+* **影刃·凯**：消耗 25 灵魂余烬招募，负责高频连击、叠层流血与 20% 血线以下斩杀
+
+</details>
+
+<details>
+<summary><b>开源致谢与第三方许可</b></summary>
+
+* 帧缓冲与粒子特效库来自内置的 `vendor/pixelfx`（MIT License），完整许可与版权声明见 [vendor/pixelfx/LICENSE](vendor/pixelfx/LICENSE) 与 [vendor/pixelfx/NOTICE.md](vendor/pixelfx/NOTICE.md)。
+
+</details>
+
+<a id="limits"></a>
+
+## 当前边界与限制
+
+> [!WARNING]
+> 本项目为纯浏览器前端单机游戏，**不提供**后端账户系统、云存档同步、联机对战或全球排行榜。
+
+* 存档仅保存在当前浏览器的 `localStorage`（key 为 `pixel-idle-dungeon-v1`），清理浏览器缓存或无痕窗口关闭后会丢失进度，换设备前请务必在「典籍 → 导出存档」手动备份。
+* 全部角色与地牢像素图由 [js/sprites.js](js/sprites.js) 字符网格直接生成，无外部 PNG/SpriteSheet 美术资源管线。
+* 仓库根目录暂未单独放置整库开源 `LICENSE` 文件；仅 `vendor/pixelfx/` 目录下附带其自身的 MIT 许可协议。
